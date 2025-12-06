@@ -17,7 +17,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     number = Column(String, nullable= True)
     role = Column(Enum(Roles), nullable=False)
-    organisation = relationship("Organisations", secondary="OrganisationMembers", backref="members")
+    organisations = relationship("Organisations", secondary="OrganisationMembers", back_populates="members")
 
 class Organisation(Base):
     __tablename__ = "Organisations"
@@ -26,7 +26,7 @@ class Organisation(Base):
     email = Column(String, unique= True, nullable=False)
     number = Column(String, nullable= False)
     address = Column(String, nullable= False)
-    members = relationship("user", secondary="OrganisationMembers", backref="organisation")
+    members = relationship("User", secondary="OrganisationMembers", back_populates="organisation")
 
 class OrganisationMember(Base):
     __tablename__ = "OrganisationMembers"
