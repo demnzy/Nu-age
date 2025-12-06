@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 load_dotenv()
-Url= os.getenv('POSTGRES_DB_URL')
+Url= 'postgresql://postgres:2862008@localhost/Nu-age'
 print(Url)
 engine = create_engine(Url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

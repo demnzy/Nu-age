@@ -13,8 +13,8 @@ load_dotenv()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
 ALGORITHM = "HS256"
-key = os.getenv('SECRET_KEY')
-expire = int(os.getenv('TIME_TO_EXPIRE'))
+key = '2862008June28?'
+expire = 30
 def create_access_token (data: dict):
     to_encode = data.copy()
     to_expire = datetime.now(timezone.utc) +  timedelta(expire)

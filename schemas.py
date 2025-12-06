@@ -51,8 +51,7 @@ class Description(BaseModel):
 class Name(BaseModel):
     name: str
 class EnrollmentBase(BaseModel):
-    student = Column(Integer,ForeignKey(User.id), primary_key=True)
-    course = Column(Integer, ForeignKey(Course.id), nullable='False', primary_key=True)
-    admin = Column(Integer, ForeignKey(User.id))
+    student: int
+    course : int
 
 

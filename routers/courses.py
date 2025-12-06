@@ -65,9 +65,14 @@ def enrol(id:int, user= Depends(auth.get_current_user), db:Session = Depends(get
     course = db.query(models.Course).filter(models.Course.id==id).first()
     if not course:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-    if course.public:
-        if user.role == 'Admin':
-            if course.admin_id == user.id: 
+    if not course.public:
+        if user.id!= course.admin_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to enrol in this course")
+        
+        
+
+                
+                
                 
 
 
