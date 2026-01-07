@@ -1,10 +1,17 @@
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
-load_dotenv()
-Url= 'postgresql://postgres:2862008@localhost/Nu-age'
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    DB_URL: str
+    ALGORITHM: str
+    KEY: str
+    EXPIRE: int
+   
+    model_config = SettingsConfigDict(env_file=".env")
+    
+Url= Settings().DB_URL
 print(Url)
 engine = create_engine(Url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -1,11 +1,41 @@
 from fastapi import *
-from .routers import users,courses,categories
-from .models import Base
-from .database import engine
+from routers import users,courses,categories
+from models import Base
+from database import engine
 Base.metadata.create_all(bind=engine)
 
+tags_metadata = [
+    {
+        "name": "Users",
+        "description": "Operations involving **login**, registration, and profile management.",
+    },
+    {
+        "name": "Courses",
+        "description": "Create and manage courses. **Admin only**.",
+    },
+]
+app = FastAPI(openapi_tags=tags_metadata)
+app.include_router(users.router, tags=["Users"])
+app.include_router(courses.router, tags=["Courses"])
+app.include_router(categories.router, tags=["Categories"])
 
-app = FastAPI()
-app.include_router(users.router)
-app.include_router(courses.router)
-app.include_router(categories.router)
+
+
+
+import sys
+from fastapi.routing import APIRoute
+
+@app.on_event("startup")
+def print_routes():
+    print("\n" + "="*50)
+    print("  AVAILABLE ROUTES (Use these URLs!)")
+    print("="*50)
+    found_any = False
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            found_any = True
+            print(f"METHOD: {route.methods}  |  PATH: {route.path}")
+    
+    if not found_any:
+        print(">> NO ROUTES FOUND! check app.include_router() lines.")
+    print("="*50 + "\n")

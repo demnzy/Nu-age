@@ -3,18 +3,18 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import os
 from dotenv import load_dotenv
-from ..database import get_db
+from database import get_db, Settings
 from sqlalchemy.orm import Session
 from fastapi import Depends,HTTPException,status
-from .. import models
+import models
 from fastapi.security import OAuth2PasswordBearer
 
 load_dotenv()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
-ALGORITHM = "HS256"
-key = '2862008June28?'
-expire = 30
+ALGORITHM = Settings().ALGORITHM
+key = Settings().KEY
+expire = Settings().EXPIRE
 def create_access_token (data: dict):
     to_encode = data.copy()
     to_expire = datetime.now(timezone.utc) +  timedelta(expire)

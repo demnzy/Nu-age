@@ -1,15 +1,16 @@
 from fastapi import *
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
-from .. schemas import *
-from ..database import get_db
+from schemas import *
+from database import get_db
 from sqlalchemy.orm import Session
-from .. import models
-from .. services import utils, auth
+import models
+from services import utils, auth
 from typing import List
-from .. import schemas
+import schemas
 
 router = APIRouter(prefix="/courses")
- 
+
+#Create Courses
 @router.post('/create')
 def create_course(course:CourseBase, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
     if user.role != "Admin":
@@ -22,21 +23,15 @@ def create_course(course:CourseBase, user= Depends(auth.get_current_user), db:Se
     db.refresh(course)
     return course
 
-@router.delete('/delete/{id}', status_code=status.HTTP_200_OK)
-def delete_course(id:int,user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
-    if user.role != "Admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to perform this operation")
-    course=db.query(models.Course).filter(models.Course.id==id).first().name
-    if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "Course Not found")
-    db.query(models.Course).filter(models.Course.id==id).delete()
-    db.commit()
-
+#Get all courses
 @router.get('')
-def get_all_courses():
-    pass
+def get_all_courses(user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    courses = db.query(models.Course).all()
+    for course in courses:
+        print(course.category.name)
+    return courses
 
-
+#Update Course Description
 @router.put('{id}/update/description/',status_code=status.HTTP_201_CREATED, response_model=CourseBase)
 def update_description(id:int,description:Description, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
     if user.role != "Admin":
@@ -49,8 +44,9 @@ def update_description(id:int,description:Description, user= Depends(auth.get_cu
     db.refresh(course)
     return course
 
-@router.put('{id}/update/name/', status_code=status.HTTP_201_CREATED, response_model=CourseBase)
-def update_description(id:int,name:Name, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+#Update Course Name
+@router.patch('{id}/update/name/', status_code=status.HTTP_201_CREATED, response_model=CourseBase)
+def update_name(id:int,name:Name, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
     if user.role != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to perform this operation")
     course = db.query(models.Course).filter(models.Course.id==id).first()
@@ -60,20 +56,13 @@ def update_description(id:int,name:Name, user= Depends(auth.get_current_user), d
     db.commit()
     db.refresh(course)
     return course
-@router.post('{id}/enrol')
-def enrol(id:int, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
-    course = db.query(models.Course).filter(models.Course.id==id).first()
+
+#Delete Course
+@router.delete('/delete/{id}', status_code=status.HTTP_200_OK)
+def delete_course(id:int,user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    if user.role != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to perform this operation")
+    course=db.query(models.Course).filter(models.Course.id==id).first()
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-    if not course.public:
-        if user.id!= course.admin_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to enrol in this course")
-        
-        
-
-                
-                
-                
-
-
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "Course Not found")
+    db.query(models.Course).filter(models.Course.id==id).delete()

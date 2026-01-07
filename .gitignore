@@ -1,0 +1,13 @@
+# 1. Ignore Python compiled files (Junk)
+__pycache__/
+*.pyc
+
+# 2. Ignore the Configuration file IF it contains passwords
+# (Ideally, use environment variables, but if you hardcoded the DB URL, ignore this file)
+alembic.ini
+.env
+
+# 3. Ignore the DBML/SQL dumps we just generated (Optional, but keeps repo clean)
+*.dbml
+*.sql
+*.png
