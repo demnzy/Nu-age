@@ -7,8 +7,8 @@ class Roles(str,Enum):
     ADMIN = 'Admin'
 
 class Gender(str, Enum):
-    MALE = "Male"
-    FEMALE = "Female"
+    MALE = "Male" 
+    FEMALE = "Female" 
     CUSTOM = "Rather not say"
     
 class Organisation(BaseModel):

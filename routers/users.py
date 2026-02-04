@@ -2,6 +2,7 @@ from fastapi import *
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from schemas import *
 from database import get_db
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import models
 from services import utils, auth
@@ -47,15 +48,16 @@ def user_login(user:OAuth2PasswordRequestForm= Depends(), db: Session = Depends(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="incorrect password")
     
 # Admin get all users
-@router.get('', response_model= list[UserBase])
-def get_all_users(db: Session = Depends(get_db)): #user = Depends(auth.get_current_user)):
+@router.get('', response_model= List[UserBase])
+def get_all_users(name: str | None = Query(None, description="search a user by name filter"), db: Session = Depends(get_db), ): #user = Depends(auth.get_current_user)):
     users=db.query(models.User).all()
-    print(users)
+    if name:
+        users=db.query(models.User).filter((models.User.first_name.ilike(f'%{name}%')) | (models.User.last_name.ilike(f'%{name}%')) | (models.User.username.ilike(f'%{name}%'))).all()
     return users
     #raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You do not have permission to access this information')
 
 # Get one user by username
-@router.get('/{username}', response_model=UserBase)
+@router.get('', response_model=UserBase)
 def get_one_user(username: str, db:Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username==username).first()
     if not user:
@@ -63,21 +65,23 @@ def get_one_user(username: str, db:Session = Depends(get_db)):
     return user
 
 # Update user email
-@router.patch('/me/email-reset', response_model=UserBase)
-def email_reset( email:email_reset, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
-    if db.query(models.User).filter(models.User.email== email.email).first():
+@router.patch('/me/email', response_model=UserBase)
+def email_reset_func(email:str, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
+    if  user.email == email:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email can't be your current email")    
+    elif db.query(models.User).filter(models.User.email== email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is associated with another account")
-    user.email=email.email
+    user.email=email
     db.commit()
     db.refresh(user)
     return user
  
 # Update username
 @router.patch('/me/username', response_model=UserBase)
-def username_reset( username:username_reset, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
-    if db.query(models.User).filter(models.User.username== username.username).first():
+def username_reset( username:str, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
+    if db.query(models.User).filter(models.User.username== username).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username is associated with another account")
-    user.username=username.username
+    user.username=username
     db.commit()
     db.refresh(user)
     return user
@@ -88,5 +92,14 @@ def delete_user(user= Depends(auth.get_current_user), db: Session = Depends(get_
     db.delete(user)
     db.commit()
     
+@router.delete('/delete', status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(email:str, user= Depends(auth.get_current_user), db: Session = Depends(get_db)): 
+    if user.role != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail= "You do not have the required permission to perorm this action")
+    User = db.query(models.User).filter(models.User.email == email).first()
+    if not User:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "User Not found")
+    db.delete(User)
+    db.commit()
     
 

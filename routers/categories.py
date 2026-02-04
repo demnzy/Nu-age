@@ -23,8 +23,10 @@ def create_category(category:CategoryBase, db:Session = Depends(get_db), user = 
     return category
 
 @router.get('', response_model= List[CategoryBase])
-def get_all_categories(db:Session = Depends(get_db), user = Depends(auth.get_current_user)):
+def get_all_categories(name: str | None = Query(None, description= "Search Category by name"),db:Session = Depends(get_db), user = Depends(auth.get_current_user)):
     categories = db.query(models.Category).all()
+    if name:
+        categories = db.query(models.Category).filter(models.Category.name.ilike(f'%{name}%')).all()
     return categories
 
 @router.patch('/update/{id}', response_model= CategoryBase)
