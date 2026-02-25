@@ -20,7 +20,7 @@ app.include_router(courses.router, tags=["Courses"])
 app.include_router(categories.router, tags=["Categories"])
 
 
-
+ 
 
 import sys
 from fastapi.routing import APIRoute

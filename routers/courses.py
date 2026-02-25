@@ -25,15 +25,15 @@ def create_course(course:CourseBase, user= Depends(auth.get_current_user), db:Se
 
 #Get all courses
 @router.get('')
-def get_all_courses(user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+def get_all_courses(name:str=Query(None),user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
     courses = db.query(models.Course).all()
-    for course in courses:
-        print(course.category.name)
+    if name:
+        courses = db.query(models.Course).filter(models.Course.name.ilike(f"%{name}%")).all()
     return courses
 
 #Update Course Description
 @router.put('{id}/update/description/',status_code=status.HTTP_201_CREATED, response_model=CourseBase)
-def update_description(id:int,description:Description, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+def update_description(id:int,description:Description,name:str=Query(None), user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
     if user.role != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to perform this operation")
     course = db.query(models.Course).filter(models.Course.id==id).first()

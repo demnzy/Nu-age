@@ -29,7 +29,7 @@ def get_all_categories(name: str | None = Query(None, description= "Search Categ
         categories = db.query(models.Category).filter(models.Category.name.ilike(f'%{name}%')).all()
     return categories
 
-@router.patch('/update/{id}', response_model= CategoryBase)
+@router.patch('/update', response_model= CategoryBase)
 def update_category(id:int, category:CategoryUpdate, db:Session = Depends(get_db), user = Depends(auth.get_current_user)):
     if user.role != "Admin":
         raise  HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You dont have the permission to perform this action")
@@ -43,3 +43,14 @@ def update_category(id:int, category:CategoryUpdate, db:Session = Depends(get_db
     db.commit()
     db.refresh(category_in_db)
     return category_in_db
+
+@router.delete('/delete', status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(id:str, user= Depends(auth.get_current_user), db: Session = Depends(get_db)): 
+    if user.role != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail= "You do not have the required permission to perorm this action")
+    category = db.query(models.Category).filter(models.Category.id == id).first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "Category Not found")
+    print(user.first_name)
+    db.delete(category)
+    db.commit()
