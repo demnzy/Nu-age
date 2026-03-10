@@ -1,6 +1,8 @@
 from pydantic import * 
 from typing import Optional
 from enum import Enum
+from uuid import UUID, uuid4
+
 class Roles(str,Enum):
     STUDENT = "Student"
     TEACHER = "Teacher"
@@ -12,13 +14,14 @@ class Gender(str, Enum):
     CUSTOM = "Rather not say"
     
 class Organisation(BaseModel):
-    id: str
+    id: int
     name : str
     email: EmailStr
     number: int
     address: str
     
 class UserBase(BaseModel):
+    id: int
     email: EmailStr
     username : str
     password : str
@@ -36,7 +39,6 @@ class UserReg(BaseModel):
     last_name: str
     gender: str
     role: str
-    organisation: Organisation
     model_config = {'from_attributes' : True}
 
 class TokenResponse(BaseModel):
@@ -78,8 +80,12 @@ class Name(BaseModel):
     
 class EnrollmentBase(BaseModel):
     student_id: int | None = None
-    course_id: int
+    course_id: int | None = None
 
-
+class CourseUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    public: bool | None= None
+    
 
 

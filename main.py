@@ -1,8 +1,9 @@
 from fastapi import *
-from routers import users,courses,categories
+from routers import enrollments, users,courses,categories
 from models import Base
 from database import engine
 Base.metadata.create_all(bind=engine)
+from fastapi.middleware.cors import CORSMiddleware
 
 tags_metadata = [
     {
@@ -18,8 +19,15 @@ app = FastAPI(openapi_tags=tags_metadata)
 app.include_router(users.router, tags=["Users"])
 app.include_router(courses.router, tags=["Courses"])
 app.include_router(categories.router, tags=["Categories"])
-
-
+app.include_router(enrollments.router,tags=["enrollments"])
+# Add this right after you declare: app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"], # Allows your Reflex frontend
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
  
 
 import sys

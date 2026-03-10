@@ -12,7 +12,7 @@ router = APIRouter(prefix=('/users'))
 
 # create a user
 @router.post('/auth/register', response_model= UserBase)
-async def register_user(user:UserBase, db: Session = Depends(get_db)):
+async def register_user(user:UserReg, db: Session = Depends(get_db)):
     user.password = utils.hash_password(user.password)
     user1 = models.User(**user.model_dump())
     if db.query(models.User).filter(models.User.username==user.username).first():
@@ -64,7 +64,11 @@ def get_one_user(username: str, db:Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "User not found")
     return user
 
+@router.get('/me', response_model=UserBase)
+def get_current_user(user = Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    return user
 # Update user email
+
 @router.patch('/me/email', response_model=UserBase)
 def email_reset_func(email:str, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
     if  user.email == email:

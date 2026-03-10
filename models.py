@@ -1,4 +1,6 @@
 from database import Base
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum,Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -7,7 +9,7 @@ from schemas import Roles, Gender
 
 class User(Base):
     __tablename__ = 'user'
-    id = Column(Integer, primary_key = True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     first_name = Column(String, nullable=False )
     last_name = Column(String, nullable=False )
     gender = Column(Enum(Gender), nullable=False)
@@ -20,10 +22,11 @@ class User(Base):
     
     organisations = relationship("Organisation", secondary="OrganisationMembers", back_populates="members")
     courses= relationship("Course", secondary= "enrollments", back_populates="Students")
+    created_courses = relationship("Course", back_populates="admin", foreign_keys="[Course.admin_id]")
 
 class Organisation(Base):
     __tablename__ = "Organisations"
-    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     name= Column(String, nullable=False, unique=True)
     email = Column(String, unique= True, nullable=False)
     number = Column(String, nullable= False)
@@ -42,7 +45,7 @@ class OrganisationMember(Base):
 
 class Category(Base):
     __tablename__ = "categories"
-    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     name= Column(String, nullable=False, unique=True)
     description = Column(String, nullable=False)
     
@@ -50,7 +53,7 @@ class Category(Base):
 
 class Course(Base):
     __tablename__ = "courses"
-    id = Column(Integer,primary_key=True,nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     admin_id = Column(Integer, ForeignKey(User.id, ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=False, default=name)
@@ -61,6 +64,7 @@ class Course(Base):
     category = relationship("Category", back_populates= "courses")
     modules = relationship("Module", back_populates="course", order_by="Module.order_index")
     Students = relationship("User", secondary= "enrollments", back_populates="courses")
+    admin = relationship("User", foreign_keys=[admin_id], back_populates="created_courses")
 
 class Enrollment(Base):
     __tablename__ = 'enrollments'
@@ -74,7 +78,7 @@ class Enrollment(Base):
 #lessons and Modules
 class Module(Base):
     __tablename__ = 'modules'
-    id = Column(Integer, primary_key = True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     course_id = Column(Integer, ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False)
@@ -86,7 +90,7 @@ class Module(Base):
     
 class Lesson(Base):
     __tablename__ = 'lessons'
-    id = Column(String, primary_key = True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     module_id = Column(Integer, ForeignKey(Module.id, ondelete = "CASCADE"), nullable = False)
