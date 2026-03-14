@@ -1,7 +1,7 @@
 from pydantic import * 
 from typing import Optional
 from enum import Enum
-from uuid import UUID, uuid4
+from uuid import UUID
 
 class Roles(str,Enum):
     STUDENT = "Student"
@@ -14,14 +14,14 @@ class Gender(str, Enum):
     CUSTOM = "Rather not say"
     
 class Organisation(BaseModel):
-    id: int
+    id: UUID
     name : str
     email: EmailStr
     number: int
     address: str
     
 class UserBase(BaseModel):
-    id: int
+    id: UUID
     email: EmailStr
     username : str
     password : str
@@ -52,17 +52,18 @@ class LoginUser(BaseModel):
 
     password: str
     
-class email_reset(BaseModel):
-    email:EmailStr
-
-class username_reset(BaseModel):
-    username: str
+class ProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
 
 class CourseBase(BaseModel):
     name : str
     description : str
-    category_id: int
+    category_id: UUID
     public: bool | None = None
+    image_url: str | None = None
     model_config = {'from_attributes': True}
     
 class CategoryBase(BaseModel):
@@ -79,8 +80,8 @@ class Name(BaseModel):
     name: str
     
 class EnrollmentBase(BaseModel):
-    student_id: int | None = None
-    course_id: int | None = None
+    student_id: UUID | None = None
+    course_id: UUID | None = None
 
 class CourseUpdate(BaseModel):
     name: str | None = None
@@ -88,4 +89,30 @@ class CourseUpdate(BaseModel):
     public: bool | None= None
     
 
+# schemas.py
 
+class UserMin(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+
+    class Config:
+        from_attributes = True
+
+class CatMin(BaseModel):
+    id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+        
+class CourseOut(BaseModel):
+    id: UUID
+    name: str
+    category: CatMin
+    progress: Optional[float] = 0.0
+    image_url: Optional[str] = None
+    admin: UserMin 
+
+    class Config:
+        from_attributes = True

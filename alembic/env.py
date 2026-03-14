@@ -7,8 +7,11 @@ import os
 
 # 1. Add current directory to path
 sys.path.insert(0, os.getcwd())
-from models import *
 from database import Base
+# Explicitly import your models one by one to force registration
+from models import User, Organisation, OrganisationMember, Category, Course, Enrollment, Module, Lesson
+
+target_metadata = Base.metadata
 from alembic import context
 
 # this is the Alembic Config object, which provides

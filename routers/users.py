@@ -69,27 +69,46 @@ def get_current_user(user = Depends(auth.get_current_user), db:Session = Depends
     return user
 # Update user email
 
-@router.patch('/me/email', response_model=UserBase)
-def email_reset_func(email:str, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
-    if  user.email == email:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email can't be your current email")    
-    elif db.query(models.User).filter(models.User.email== email).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is associated with another account")
-    user.email=email
-    db.commit()
-    db.refresh(user)
-    return user
- 
-# Update username
-@router.patch('/me/username', response_model=UserBase)
-def username_reset( username:str, db: Session = Depends(get_db), user = Depends(auth.get_current_user)):
-    if db.query(models.User).filter(models.User.username== username).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username is associated with another account")
-    user.username=username
-    db.commit()
-    db.refresh(user)
-    return user
+@router.patch('/me/update', response_model=UserBase)
+def update_profile(
+    profile_data: ProfileUpdate, 
+    db: Session = Depends(get_db), 
+    user = Depends(auth.get_current_user)
+):
+    # 1. Convert the Pydantic model to a dict, excluding unset fields
+    update_data = profile_data.model_dump(exclude_unset=True)
 
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+
+    # 2. Validation Checks for Unique Fields
+    if 'email' in update_data:
+        new_email = update_data['email']
+        if user.email == new_email:
+            raise HTTPException(status_code=409, detail="This is already your current email")
+        if db.query(models.User).filter(models.User.email == new_email).first():
+            raise HTTPException(status_code=409, detail="Email is already taken")
+        user.email = new_email
+
+    if 'username' in update_data:
+        new_username = update_data['username']
+        if user.username == new_username:
+             raise HTTPException(status_code=409, detail="This is already your current username")
+        if db.query(models.User).filter(models.User.username == new_username).first():
+            raise HTTPException(status_code=409, detail="Username is already taken")
+        user.username = new_username
+
+    # 3. Handle simple fields (first_name, last_name)
+    if 'first_name' in update_data:
+        user.first_name = update_data['first_name']
+    
+    if 'last_name' in update_data:
+        user.last_name = update_data['last_name']
+
+    # 4. Save Changes
+    db.commit()
+    db.refresh(user)
+    return user
 # Delete user 
 @router.delete('/me', status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(user= Depends(auth.get_current_user), db: Session = Depends(get_db)): 

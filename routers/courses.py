@@ -8,6 +8,7 @@ import models
 from services import utils, auth
 from typing import List
 import schemas
+from uuid import UUID
 
 router = APIRouter(prefix="/courses")
 
@@ -26,14 +27,25 @@ def create_course(course:CourseBase, user= Depends(auth.get_current_user), db:Se
 
 #Get all courses
 @router.get('')
-def get_all_courses(name: str = Query(None), user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    # Create the base query with the 'admin' relationship pre-loaded
-    query = db.query(models.Course).options(joinedload(models.Course.admin),joinedload(models.Course.category))
+def get_all_courses(name: str = Query(None),is_public: bool = Query(None),id:UUID = Query(None), user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    query = db.query(models.Course).options(
+        joinedload(models.Course.admin),
+        joinedload(models.Course.category),
+        joinedload(models.Course.Students)
+    )
     
+    # 2. Apply Filters
     if name:
         query = query.filter(models.Course.name.ilike(f"%{name}%"))
     
+    if is_public is not None:
+        query = query.filter(models.Course.public == is_public)
+    if id:
+        query = query.filter(models.Course.id == id)
+        
+    
     courses = query.all()
+    
     return courses
 #Update Course 
 @router.patch('/update', response_model= CourseBase)

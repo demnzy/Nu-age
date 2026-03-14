@@ -1,7 +1,7 @@
 from database import Base
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum,Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum,Boolean,Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from schemas import Roles, Gender
@@ -31,15 +31,15 @@ class Organisation(Base):
     email = Column(String, unique= True, nullable=False)
     number = Column(String, nullable= False)
     address = Column(String, nullable= False)
-    owner_id = Column(Integer, ForeignKey(User.id, ondelete= "CASCADE"))
+    owner_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete= "CASCADE"))
     
     members = relationship("User", secondary="OrganisationMembers", back_populates="organisations")
     owner = relationship("User", foreign_keys=[owner_id], backref="owns")
 
 class OrganisationMember(Base):
     __tablename__ = "OrganisationMembers"
-    user_id = Column(Integer, ForeignKey(User.id, ondelete="CASCADE"), primary_key=True)
-    organisation_id = Column(Integer, ForeignKey("Organisations.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), primary_key=True)
+    organisation_id = Column(UUID(as_uuid=True), ForeignKey("Organisations.id", ondelete="CASCADE"), primary_key=True)
 
 #courses and categories
 
@@ -54,25 +54,28 @@ class Category(Base):
 class Course(Base):
     __tablename__ = "courses"
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
-    admin_id = Column(Integer, ForeignKey(User.id, ondelete="CASCADE"), nullable=False)
+    admin_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=False, default=name)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    category_id = Column(Integer, ForeignKey(Category.id))
+    category_id = Column(UUID(as_uuid=True), ForeignKey(Category.id))
     public = Column(Boolean, default=False)
+    image_url= Column(String, nullable=True)
     
-    category = relationship("Category", back_populates= "courses")
+    category = relationship("Category", back_populates= "courses", lazy="joined")
     modules = relationship("Module", back_populates="course", order_by="Module.order_index")
     Students = relationship("User", secondary= "enrollments", back_populates="courses")
-    admin = relationship("User", foreign_keys=[admin_id], back_populates="created_courses")
+    admin = relationship("User", foreign_keys=[admin_id], back_populates="created_courses", lazy="joined")
 
 class Enrollment(Base):
     __tablename__ = 'enrollments'
-    student_id = Column(Integer,ForeignKey(User.id, ondelete = "CASCADE"), primary_key=True)
-    course_id = Column(Integer, ForeignKey(Course.id), nullable=False, primary_key=True)
+    student_id = Column(UUID(as_uuid=True),ForeignKey(User.id, ondelete = "CASCADE"), primary_key=True)
+    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id), nullable=False, primary_key=True)
     final_score= Column(Integer, default=0)
-    enrolled  = Column(DateTime(timezone=True), server_default=func.now())
-    
+    enrolled_at  = Column(DateTime(timezone=True), server_default=func.now())
+    progress = Column(Float, nullable=False, server_default="0.0", default=0.0)
+    course = relationship("Course",overlaps="Students,courses")
+    student = relationship("User",overlaps="Students,courses")
 
     
 #lessons and Modules
@@ -81,7 +84,7 @@ class Module(Base):
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    course_id = Column(Integer, ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False)
+    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False)
     order_index = Column(String, nullable = False, default=0)
     concluded = Column(Boolean, default= False)
     
@@ -93,7 +96,7 @@ class Lesson(Base):
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    module_id = Column(Integer, ForeignKey(Module.id, ondelete = "CASCADE"), nullable = False)
+    module_id = Column(UUID(as_uuid=True), ForeignKey(Module.id, ondelete = "CASCADE"), nullable = False)
     order_index = Column(String, nullable = False)
     concluded = Column(Boolean, default= False)
     content_url = Column(String, nullable=True)

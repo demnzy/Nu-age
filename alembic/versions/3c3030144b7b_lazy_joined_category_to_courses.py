@@ -1,8 +1,8 @@
-"""help 2
+"""lazy joined category to courses
 
-Revision ID: 59a79b22bf5f
-Revises: 145cddca8c1c
-Create Date: 2025-12-13 02:32:16.282358
+Revision ID: 3c3030144b7b
+Revises: 22cea72f619b
+Create Date: 2026-03-13 04:55:34.016326
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '59a79b22bf5f'
-down_revision: Union[str, Sequence[str], None] = '145cddca8c1c'
+revision: str = '3c3030144b7b'
+down_revision: Union[str, Sequence[str], None] = '22cea72f619b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
