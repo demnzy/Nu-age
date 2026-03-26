@@ -1,13 +1,11 @@
 from fastapi import *
-from fastapi.security.oauth2 import OAuth2PasswordRequestForm
-from matplotlib import category
 from schemas import *
 from database import get_db
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 import models
 from services import utils, auth
 from typing import List
-import schemas
 from uuid import UUID
 
 router = APIRouter(prefix="/courses")
@@ -36,7 +34,12 @@ def get_all_courses(name: str = Query(None),is_public: bool = Query(None),id:UUI
     
     # 2. Apply Filters
     if name:
-        query = query.filter(models.Course.name.ilike(f"%{name}%"))
+        query = query.join(models.Category).filter(
+            or_(
+                models.Course.name.ilike(f"%{name}%"),
+                models.Category.name.ilike(f"%{name}%")
+            )
+        )
     
     if is_public is not None:
         query = query.filter(models.Course.public == is_public)

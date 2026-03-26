@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum,Boole
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from schemas import Roles, Gender
+from sqlalchemy.dialects.postgresql import ARRAY
 #entities
 
 class User(Base):
@@ -59,6 +60,7 @@ class Course(Base):
     description = Column(String, nullable=False, default=name)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     category_id = Column(UUID(as_uuid=True), ForeignKey(Category.id))
+    objectives = Column(ARRAY(String), nullable=True)
     public = Column(Boolean, default=False)
     image_url= Column(String, nullable=True)
     

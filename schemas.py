@@ -1,7 +1,8 @@
-from pydantic import * 
-from typing import Optional
+from pydantic import BaseModel, field_serializer, EmailStr
+from typing import Optional, List
 from enum import Enum
 from uuid import UUID
+from datetime import datetime
 
 class Roles(str,Enum):
     STUDENT = "Student"
@@ -110,9 +111,16 @@ class CourseOut(BaseModel):
     id: UUID
     name: str
     category: CatMin
+    created_at: datetime # This stays a datetime object internally
+
+    @field_serializer('created_at')
+    def serialize_dt(self, dt: datetime, _info):
+        # Format: Day/Month/Year (e.g., 24/03/2026)
+        return dt.strftime('%d/%m/%Y')
     progress: Optional[float] = 0.0
     image_url: Optional[str] = None
     admin: UserMin 
+    objectives: List[str] |  None = None
 
     class Config:
         from_attributes = True
