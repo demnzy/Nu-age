@@ -124,3 +124,11 @@ class CourseOut(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class orgbase(BaseModel):
+    name: str
+    email :str
+    number : str
+    website: Optional[str] = None
+    address : str 
+    model_config = {'from_attributes': True}

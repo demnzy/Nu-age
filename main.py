@@ -1,5 +1,5 @@
 from fastapi import *
-from routers import enrollments, users,courses,categories
+from routers import enrollments, users,courses,categories, organisations
 from models import Base
 from database import engine
 Base.metadata.create_all(bind=engine)
@@ -20,6 +20,7 @@ app.include_router(users.router, tags=["Users"])
 app.include_router(courses.router, tags=["Courses"])
 app.include_router(categories.router, tags=["Categories"])
 app.include_router(enrollments.router,tags=["enrollments"])
+app.include_router(organisations.router,tags=["organisations"])
 # Add this right after you declare: app = FastAPI()
 app.add_middleware(
     CORSMiddleware,

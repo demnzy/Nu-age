@@ -27,16 +27,37 @@ class User(Base):
 
 class Organisation(Base):
     __tablename__ = "Organisations"
-    id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
-    name= Column(String, nullable=False, unique=True)
-    email = Column(String, unique= True, nullable=False)
-    number = Column(String, nullable= False)
-    address = Column(String, nullable= False)
-    owner_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete= "CASCADE"))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String, nullable=False, unique=True)
+    email = Column(String, unique=True, nullable=False)
+    number = Column(String, nullable=False)
+    website = Column(String, nullable=True)
+    address = Column(String, nullable=False)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"))
+    logo = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"), nullable=True)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True) # Null for lifetime/free plans
     
+    # Relationships
     members = relationship("User", secondary="OrganisationMembers", back_populates="organisations")
     owner = relationship("User", foreign_keys=[owner_id], backref="owns")
+    plan = relationship("Plan", back_populates="organisations", lazy="joined")
 
+class Plan(Base):
+    __tablename__ = "plans"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    name = Column(String, nullable=False, unique=True) # e.g., "Free", "Pro", "Enterprise"
+    description = Column(String, nullable=True)
+    price = Column(Float, nullable=False, default=0.0)
+    
+    max_members = Column(Integer, nullable=True)
+    max_courses = Column(Integer, nullable=True)
+    features = Column(ARRAY(String), nullable=True) 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    organisations = relationship("Organisation", back_populates="plan")
+    
 class OrganisationMember(Base):
     __tablename__ = "OrganisationMembers"
     user_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), primary_key=True)
@@ -62,6 +83,7 @@ class Course(Base):
     category_id = Column(UUID(as_uuid=True), ForeignKey(Category.id))
     objectives = Column(ARRAY(String), nullable=True)
     public = Column(Boolean, default=False)
+    org_id = Column(UUID(as_uuid=True), ForeignKey(Organisation.id, ondelete = "CASCADE"), nullable = True)
     image_url= Column(String, nullable=True)
     
     category = relationship("Category", back_populates= "courses", lazy="joined")
