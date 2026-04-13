@@ -22,7 +22,7 @@ def create_category(category:CategoryBase, db:Session = Depends(get_db), user = 
     db.refresh(category)
     return category
 
-@router.get('', response_model= List[CategoryBase])
+@router.get('', response_model= List[CategoryOut])
 def get_all_categories(name: str | None = Query(None, description= "Search Category by name"),db:Session = Depends(get_db), user = Depends(auth.get_current_user)):
     categories = db.query(models.Category).all()
     if name:

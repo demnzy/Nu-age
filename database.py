@@ -8,7 +8,16 @@ class Settings(BaseSettings):
     ALGORITHM: str
     KEY: str
     EXPIRE: int
-   
+    BUNNY_STORAGE_KEY: str
+    STORAGE_ZONE_NAME : str
+    PULL_ZONE_URL:str
+    BUNNY_REGION_URL : str
+    STREAM_API_KEY : str
+    STREAM_LIBRARY_ID : int
+    PRIVATE_STORAGE_KEY : str
+    BUNNY_TOKEN_SECURITY_KEY : str
+    PRIVATE_STORAGE_ZONE : str
+    STREAM_CDN_HOSTNAME : str
     model_config = SettingsConfigDict(env_file=".env")
     
 Url= Settings().DB_URL

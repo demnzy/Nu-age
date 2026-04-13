@@ -60,17 +60,28 @@ class ProfileUpdate(BaseModel):
     username: Optional[str] = None
 
 class CourseBase(BaseModel):
-    name : str
-    description : str
-    category_id: UUID
-    public: bool | None = None
-    image_url: str | None = None
-    model_config = {'from_attributes': True}
+    name: str
+    description: str
+    category_id: str
+    objectives: Optional[List[str]] = None
+    public: bool = False
+    org_id: Optional[str] = None
+    teacher_id: Optional[str] = None
+    supervised: bool = False
+    
+    # --- ADD THESE FOR BUNNY.NET ---
+    image_bytes: Optional[str] = None
+    image_filename: Optional[str] = None
     
 class CategoryBase(BaseModel):
     name: str
     description: str
 
+class CategoryOut(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    
 class CategoryUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
@@ -131,4 +142,7 @@ class orgbase(BaseModel):
     number : str
     website: Optional[str] = None
     address : str 
+    logo_bytes: Optional[bytes] = None
+    logo_filename: Optional[str] = None
+    theme_color: Optional[str] = None
     model_config = {'from_attributes': True}

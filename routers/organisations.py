@@ -1,27 +1,61 @@
 from fastapi import *
 from schemas import *
-from database import get_db
+from database import get_db,Settings
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, select
 import models
 from services import utils, auth
 from typing import List
-from uuid import UUID
-
+import base64
+from services.bunny_service import upload_bytes_to_bunny
+import uuid
 router = APIRouter(prefix="/organisations")
-
 @router.post('/create')
-def create_org(org:orgbase, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
-    org= org.model_dump()
-    org['owner_id']= user.id  
-    org = models.Organisation(**org)
-    if db.query(models.Organisation).filter(models.Organisation.name==org.name).first():
+async def create_org(payload: orgbase, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    
+    # 1. Check Uniqueness First (Fail fast before doing any work)
+    if db.query(models.Organisation).filter(models.Organisation.name == payload.name).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Organisation name already exists, choose another one")
-    if db.query(models.Organisation).filter(models.Organisation.email==org.email).first():
+    
+    if db.query(models.Organisation).filter(models.Organisation.email == payload.email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is associated with another Organisation")
+
+    # 2. Prepare the database model
+    # We use exclude=() so Pydantic doesn't try to pass "logo_bytes" into the SQLAlchemy model!
+    org_data = payload.model_dump(exclude={"logo_bytes", "logo_filename"})
+    org_data['owner_id'] = user.id  
+    
+    # 3. Create and save the base Organization
+    org = models.Organisation(**org_data)
     db.add(org)
     db.commit()
-    db.refresh(org)
+    db.refresh(org) # This assigns org.id from PostgreSQL
+
+    # 4. Handle the Logo Upload (Only if the user provided one)
+    if payload.logo_bytes and payload.logo_filename:
+        try:
+            # Decode the Base64 string back into raw bytes for Bunny.net
+            raw_image_bytes = base64.b64decode(payload.logo_bytes)
+            
+            # Sanitize the filename and define the folder
+            file_extension = payload.logo_filename.split(".")[-1]
+            safe_filename = f"logo_{uuid.uuid4().hex}.{file_extension}"
+            folder_path = f"logos/{org.id}"
+
+            # Upload to Bunny.net
+            cdn_url = await upload_bytes_to_bunny(raw_image_bytes, safe_filename, folder_path)
+            
+            # Update the organization with the new CDN URL
+            org.logo = cdn_url
+            db.commit()
+            db.refresh(org)
+            
+        except Exception as e:
+            # If the image upload fails, the organization is still safely created!
+            # We just print the error and return the org without a logo.
+            print(f"Warning: Org created, but logo upload failed: {str(e)}")
+
+    # 5. Return the final organization
     return org
     
 @router.get('/me')
@@ -38,7 +72,6 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
             models.Course.org_id == org.id
         ).count()
 
-        # Adjust 'schemas.Roles.STAFF' to match your actual enum value for staff
         staff_count = db.query(models.User).join(
             models.OrganisationMember, models.User.id == models.OrganisationMember.user_id
         ).filter(
@@ -46,21 +79,37 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
             models.User.role == Roles.TEACHER 
         ).count()
 
-        # 2. Extract the base organization data into a dictionary
-        # This safely grabs all columns defined in your Organisation model
+        # 2. Extract the base organization data
         org_data = {column.name: getattr(org, column.name) for column in org.__table__.columns}
 
-        # 3. Inject the stats into the same dictionary
+        # 3. Inject the stats
         org_data["members"] = member_count
         org_data["courses"] = course_count
         org_data["staff"] = staff_count
-        org_data["plan"] = "Free" # Hardcoded until a plan column is added
+
+        # 4. Extract Plan data using the relationship
+        if org.plan:
+            org_data["plan"] = {column.name: getattr(org.plan, column.name) for column in org.plan.__table__.columns}
+        else:
+            org_data["plan"] = None
 
         print(f"User owns: {org.name}")
         
-        # 4. Return the flattened dictionary
         return org_data
         
     else:
         print("User has not created an organization.")
         return None
+
+@router.get('/members')
+async def get_organisation_members(id=Query(None), user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    org = db.query(models.Organisation).options(joinedload(models.Organisation.members)).filter(models.Organisation.id == id).first()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found")
+    return org.members
+@router.get('/courses')
+async def get_organisation_courses(id=Query(None), user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
+    org = db.query(models.Organisation).options(joinedload(models.Organisation.courses)).filter(models.Organisation.id == id).first()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found")
+    return org.courses

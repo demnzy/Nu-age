@@ -7,25 +7,62 @@ import models
 from services import utils, auth
 from typing import List
 from uuid import UUID
-
+import base64
+import uuid
+from services.bunny_service import upload_bytes_to_bunny 
 router = APIRouter(prefix="/courses")
 
 #Create Courses
 @router.post('/create')
-def create_course(course:CourseBase, user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
-    if user.role != "Admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have the permission to perform this operation")
-    course = course.model_dump()
-    course['admin_id']=user.id
-    course = models.Course(**course)
+async def create_course(payload: CourseBase, user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    
+    # 1. Permission Check
+    if user.role != "Admin": # Note: Make sure this matches your exact Roles enum/string
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="You do not have the permission to perform this operation"
+        )
+    
+    # 2. Extract data, explicitly excluding the image fields so SQLAlchemy doesn't crash
+    course_data = payload.model_dump(exclude={"image_bytes", "image_filename"})
+    course_data['admin_id'] = user.id
+    
+    # 3. Create the Course in the Database FIRST
+    course = models.Course(**course_data)
     db.add(course)
     db.commit()
-    db.refresh(course)
+    db.refresh(course) # Now we have course.id!
+
+    # 4. Handle the Image Upload to Bunny.net
+    if payload.image_bytes and payload.image_filename:
+        try:
+            # Decode the base64 string
+            raw_image_bytes = base64.b64decode(payload.image_bytes)
+            
+            # Sanitize the filename
+            file_extension = payload.image_filename.split(".")[-1]
+            safe_filename = f"thumbnail_{uuid.uuid4().hex}.{file_extension}"
+            
+            # Set the Cloud Folder Structure -> courses/{course_id}/
+            folder_path = f"courses/{course.id}"
+            
+            # Upload to the CDN
+            cdn_url = await upload_bytes_to_bunny(raw_image_bytes, safe_filename, folder_path)
+            
+            # Update the Course record with the final URL
+            course.image_url = cdn_url
+            db.commit()
+            db.refresh(course)
+            
+        except Exception as e:
+            # The course is still created safely even if the image upload fails
+            print(f"Warning: Course created, but image upload failed: {str(e)}")
+
     return course
 
 #Get all courses
 @router.get('')
-def get_all_courses(name: str = Query(None),is_public: bool = Query(None),id:UUID = Query(None), user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+def get_all_courses(name: str = Query(None),org: UUID = Query(None),is_public: bool = Query(None),id:UUID = Query(None), user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
     query = db.query(models.Course).options(
         joinedload(models.Course.admin),
         joinedload(models.Course.category),
@@ -40,6 +77,8 @@ def get_all_courses(name: str = Query(None),is_public: bool = Query(None),id:UUI
                 models.Category.name.ilike(f"%{name}%")
             )
         )
+    if org:
+        query = query.filter(models.Course.org_id == org)
     
     if is_public is not None:
         query = query.filter(models.Course.public == is_public)

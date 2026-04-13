@@ -1,5 +1,5 @@
 from fastapi import *
-from routers import enrollments, users,courses,categories, organisations
+from routers import enrollments, media, users,courses,categories, organisations, curriculum
 from models import Base
 from database import engine
 Base.metadata.create_all(bind=engine)
@@ -14,6 +14,10 @@ tags_metadata = [
         "name": "Courses",
         "description": "Create and manage courses. **Admin only**.",
     },
+    {
+        "name": "Curriculum Management",
+        "description": "Manage course curricula. **Admin only**.",
+    },
 ]
 app = FastAPI(openapi_tags=tags_metadata)
 app.include_router(users.router, tags=["Users"])
@@ -21,6 +25,8 @@ app.include_router(courses.router, tags=["Courses"])
 app.include_router(categories.router, tags=["Categories"])
 app.include_router(enrollments.router,tags=["enrollments"])
 app.include_router(organisations.router,tags=["organisations"])
+app.include_router(media.router, tags=["Media Handling"])
+app.include_router(curriculum.router, tags=["Curriculum Management"])
 # Add this right after you declare: app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
