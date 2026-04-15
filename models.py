@@ -24,7 +24,8 @@ class User(Base):
     organisations = relationship("Organisation", secondary="OrganisationMembers", back_populates="members")
     courses= relationship("Course", secondary= "enrollments", back_populates="Students")
     created_courses = relationship("Course", back_populates="admin", foreign_keys="[Course.admin_id]")
-
+    teaches = relationship("Course", back_populates="teacher", foreign_keys="[Course.teacher_id]")
+    
 class Organisation(Base):
     __tablename__ = "Organisations"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
@@ -94,6 +95,7 @@ class Course(Base):
     Students = relationship("User", secondary= "enrollments", back_populates="courses")
     admin = relationship("User", foreign_keys=[admin_id], back_populates="created_courses", lazy="joined")
     organisation = relationship("Organisation", back_populates="courses")
+    teacher = relationship("User", foreign_keys=[teacher_id], back_populates="teaches")
     
 class Enrollment(Base):
     __tablename__ = 'enrollments'
@@ -113,14 +115,13 @@ class Module(Base):
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False)
+
     
     # UPDATE 1: Changed from String to Integer for proper sorting
     order_index = Column(Integer, nullable = False, default=0) 
     concluded = Column(Boolean, default= False)
     
     course = relationship("Course", back_populates="modules")
-    
-    # UPDATE 2: Explicitly order the relationship by the child's order_index
     lessons = relationship("Lesson", back_populates='modules', order_by="Lesson.order_index")
     
 class Lesson(Base):

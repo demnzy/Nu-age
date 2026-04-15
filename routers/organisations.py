@@ -78,6 +78,13 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
             models.OrganisationMember.organisation_id == org.id,
             models.User.role == Roles.TEACHER 
         ).count()
+        
+        student_count = db.query(models.User).join(
+            models.OrganisationMember, models.User.id == models.OrganisationMember.user_id
+        ).filter(
+            models.OrganisationMember.organisation_id == org.id,
+            models.User.role == Roles.STUDENT 
+        ).count()
 
         # 2. Extract the base organization data
         org_data = {column.name: getattr(org, column.name) for column in org.__table__.columns}
@@ -86,6 +93,7 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
         org_data["members"] = member_count
         org_data["courses"] = course_count
         org_data["staff"] = staff_count
+        org_data["students"] = student_count
 
         # 4. Extract Plan data using the relationship
         if org.plan:
@@ -93,7 +101,6 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
         else:
             org_data["plan"] = None
 
-        print(f"User owns: {org.name}")
         
         return org_data
         
@@ -101,11 +108,44 @@ async def get_user_organisation(user= Depends(auth.get_current_user), db:Session
         print("User has not created an organization.")
         return None
 
+# Make sure your models file is imported properly
+
 @router.get('/members')
-async def get_organisation_members(id=Query(None), user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
-    org = db.query(models.Organisation).options(joinedload(models.Organisation.members)).filter(models.Organisation.id == id).first()
+async def get_organisation_members(
+    id: str = Query(...), 
+    students: bool = Query(False, description="Filter to show students"),
+    teachers: bool = Query(False, description="Filter to show teachers"),
+    user = Depends(auth.get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # 1. Ensure the organisation exists
+    org = db.query(models.Organisation).filter(models.Organisation.id == id).first()
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found")
+
+    # 2. Base query: Start with Users, but JOIN the OrganisationMember table 
+    # so we can filter based on the connection
+    query = db.query(models.User).join(
+        models.OrganisationMember, 
+        models.User.id == models.OrganisationMember.user_id
+    ).filter(
+        models.OrganisationMember.organisation_id == id
+    )
+
+    # 3. Build the role filter list based on the query parameters
+    target_roles = []
+    if students:
+        target_roles.append("student") 
+    if teachers:
+        target_roles.append("teacher") 
+
+    # 4. If any roles were requested, apply the filter to the association table's role column
+    if target_roles:
+        query = query.filter(models.OrganisationMember.role.in_(target_roles))
+
+    # 5. Execute and return the list of User objects
+    return query.all()
+
     return org.members
 @router.get('/courses')
 async def get_organisation_courses(id=Query(None), user= Depends(auth.get_current_user), db:Session = Depends(get_db)):
