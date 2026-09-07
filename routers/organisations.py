@@ -311,8 +311,8 @@ async def send_organisation_invite(
     db.commit()
     db.refresh(new_invite)
     
-    # 3. Construct the link to your Flet frontend
-    frontend_link = f"https://learn.nu-age.name.ng/accept-invite/{new_invite.id}"
+    # 3. Construct the link to the web landing / invite handler
+    frontend_link = f"https://nu-age.name.ng/accept-invite/{new_invite.id}"
     
     # 4. Trigger background email sending (replace with your actual email logic)
     background_tasks.add_task(send_organisation_invite_email, request.target_email, frontend_link, org.name, request.role)
@@ -550,39 +550,52 @@ async def process_invitation_join(
     if not invite:
         raise HTTPException(status_code=404, detail="Invalid invitation token.")
         
-    if invite.uses_left <= 0:
-        raise HTTPException(status_code=400, detail="This invitation has already been used.")
-        
     if invite.expires_at < datetime.now(timezone('UTC')):
         raise HTTPException(status_code=400, detail="This invitation has expired.")
+
+    # Fetch organisation details for richer response
+    org = db.query(models.Organisation).filter(models.Organisation.id == invite.organisation_id).first()
+    org_name = org.name if org else "the organisation"
+    org_logo = org.logo if org else None
 
     # 2. Check if the targeted email is already registered
     user = db.query(models.User).filter(models.User.email == invite.target_email).first()
     
+    # Check if the user is ALREADY an organisation member (idempotency safeguard)
+    if user:
+        existing_member = db.query(models.OrganisationMember).filter(
+            models.OrganisationMember.user_id == user.id,
+            models.OrganisationMember.organisation_id == invite.organisation_id
+        ).first()
+        
+        if existing_member:
+            return {
+                "status": "already_member",
+                "org_name": org_name,
+                "org_logo": org_logo,
+                "email": invite.target_email,
+                "message": f"User is already a member of {org_name}."
+            }
+
+    # Only check uses_left if the user is NOT already a member
+    if invite.uses_left <= 0:
+        raise HTTPException(status_code=400, detail="This invitation has already been used.")
+
     # --- SCENARIO B: User is NOT on the platform ---
     if not user:
         return {
             "status": "needs_signup",
             "email": invite.target_email,
-            "org_id": invite.organisation_id,
-            "message": "User not found. Route to signup."
+            "org_id": str(invite.organisation_id),
+            "org_name": org_name,
+            "org_logo": org_logo,
+            "message": f"User not found. Please sign up to join {org_name}."
         }
         
-    # --- SCENARIO A: User IS on the platform ---
-    existing_member = db.query(models.OrganisationMember).filter(
-        models.OrganisationMember.user_id == user.id,
-        models.OrganisationMember.organisation_id == invite.organisation_id
-    ).first()
-    
-    if existing_member:
-        return {"status": "already_member", "message": "User is already in this organisation."}
-        
+    # --- SCENARIO A: User IS on the platform, adding to org ---
     try:
-        # Preserve the role that was set when the invite was sent, defaulting
-        # to "student" only if the invite somehow has no role stored.
         invite_role = str(getattr(invite, "role", None) or "student").lower()
 
-        # Create the junction table entry
         new_member = models.OrganisationMember(
             user_id=user.id,
             organisation_id=invite.organisation_id,
@@ -590,18 +603,32 @@ async def process_invitation_join(
         )
         db.add(new_member)
         
-        # Burn the invite token
         invite.uses_left -= 1
-        
         db.commit()
         
         return {
-            "status": "success", 
-            "message": "User successfully added to the organisation."
+            "status": "success",
+            "org_name": org_name,
+            "org_logo": org_logo,
+            "email": invite.target_email,
+            "message": f"User successfully added to {org_name}."
         }
         
     except Exception as e:
         db.rollback()
+        # Concurrency safety: check if parallel request already added the membership
+        recheck_member = db.query(models.OrganisationMember).filter(
+            models.OrganisationMember.user_id == user.id,
+            models.OrganisationMember.organisation_id == invite.organisation_id
+        ).first()
+        if recheck_member:
+            return {
+                "status": "already_member",
+                "org_name": org_name,
+                "org_logo": org_logo,
+                "email": invite.target_email,
+                "message": f"User is already a member of {org_name}."
+            }
         raise HTTPException(status_code=500, detail="Failed to join organisation.")
 @router.get("/{org_id}/invitations/pending")
 async def get_pending_invitations(

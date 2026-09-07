@@ -48,7 +48,14 @@ app.include_router(network.router, tags=["Friends Management"])
 # Add this right after you declare: app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Allows your Reflex frontend
+    allow_origins=[
+        "https://nu-age.name.ng",
+        "https://www.nu-age.name.ng",
+        "https://learn.nu-age.name.ng",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ],
+    allow_origin_regex=r"^https://.*\.nu-age\.name\.ng$",
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 

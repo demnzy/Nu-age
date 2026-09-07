@@ -590,7 +590,9 @@ def logout(payload: LogoutRequest, db: Session = Depends(get_db)):
     
 # Admin get all users
 @router.get('', response_model= List[UserBase])
-def get_all_users(name: str | None = Query(None, description="search a user by name filter"), db: Session = Depends(get_db), ): #user = Depends(auth.get_current_user)):
+def get_all_users(name: str | None = Query(None, description="search a user by name filter"), db: Session = Depends(get_db),user = Depends(auth.get_current_user)):
+    if not user:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You do not have permission to access this information')
     users=db.query(models.User).all()
     if name:
         users=db.query(models.User).filter((models.User.first_name.ilike(f'%{name}%')) | (models.User.last_name.ilike(f'%{name}%')) | (models.User.username.ilike(f'%{name}%'))).all()
