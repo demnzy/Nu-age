@@ -312,7 +312,7 @@ async def send_organisation_invite(
     db.refresh(new_invite)
     
     # 3. Construct the link to the web landing / invite handler
-    frontend_link = f"https://nu-age.name.ng/accept-invite/{new_invite.id}"
+    frontend_link = f"https://nu-age.name.ng/accept-invite?token={new_invite.id}"
     
     # 4. Trigger background email sending (replace with your actual email logic)
     background_tasks.add_task(send_organisation_invite_email, request.target_email, frontend_link, org.name, request.role)
