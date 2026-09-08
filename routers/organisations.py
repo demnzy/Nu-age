@@ -250,6 +250,13 @@ def join_organization(
             detail="Organization not found."
         )
 
+    # Prevent owner from adding themselves as a regular member
+    if org.owner_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are the owner of this organization and cannot add yourself as a regular member."
+        )
+
     # 2. Prevent Duplicate Memberships
     existing_membership = db.query(models.OrganisationMember).filter(
         models.OrganisationMember.organisation_id == org_id,
@@ -288,17 +295,56 @@ async def send_organisation_invite(
     request: InviteCreateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user= Depends(auth.get_current_user) # Assuming you have an auth dependency
+    current_user= Depends(auth.get_current_user)
 ):
-    # 1. Verify the org exists and the current_user is the owner/admin
+    # 1. Verify the org exists
     org = db.query(models.Organisation).filter(models.Organisation.id == request.organisation_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organisation not found")
         
-    # (Optional) Verify current_user has permission to invite people to this org here
+    # Verify current_user has permission (must be owner or an admin of this org)
+    if org.owner_id != current_user.id:
+        admin_member = db.query(models.OrganisationMember).filter(
+            models.OrganisationMember.organisation_id == org.id,
+            models.OrganisationMember.user_id == current_user.id,
+            models.OrganisationMember.role == "admin"
+        ).first()
+        if not admin_member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to invite members to this organisation.")
+
+    target_email_clean = request.target_email.lower().strip()
+
+    # Edge case 1: Admin inviting themselves
+    if target_email_clean == current_user.email.lower().strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot invite yourself to an organization you already manage.")
+
+    # Edge case 2: Inviting the organization owner
+    owner = db.query(models.User).filter(models.User.id == org.owner_id).first()
+    if owner and owner.email.lower().strip() == target_email_clean:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The organization owner is already part of the organization.")
+
+    # Edge case 3: Inviting someone who is ALREADY an active member of this organization
+    target_user = db.query(models.User).filter(func.lower(models.User.email) == target_email_clean).first()
+    if target_user:
+        existing_member = db.query(models.OrganisationMember).filter(
+            models.OrganisationMember.organisation_id == org.id,
+            models.OrganisationMember.user_id == target_user.id
+        ).first()
+        if existing_member:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"User with email '{request.target_email}' is already a member of this organization.")
+
+    # Edge case 4: Active pending invitation already exists for this email
+    existing_invite = db.query(models.Invitations).filter(
+        models.Invitations.organisation_id == org.id,
+        func.lower(models.Invitations.target_email) == target_email_clean,
+        models.Invitations.uses_left > 0,
+        models.Invitations.expires_at > datetime.now(timezone('UTC'))
+    ).first()
+    if existing_invite:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"An active invitation has already been sent to '{request.target_email}'.")
     
     # 2. Create the Invitation record
-    new_invite =    models.Invitations(
+    new_invite = models.Invitations(
         target_email=request.target_email,
         organisation_id=request.organisation_id,
         uses_left=1, # Single-use for a direct email
@@ -314,7 +360,7 @@ async def send_organisation_invite(
     # 3. Construct the link to the web landing / invite handler
     frontend_link = f"https://nu-age.name.ng/accept-invite?token={new_invite.id}"
     
-    # 4. Trigger background email sending (replace with your actual email logic)
+    # 4. Trigger background email sending
     background_tasks.add_task(send_organisation_invite_email, request.target_email, frontend_link, org.name, request.role)
     
     return {"message": "Invite sent successfully", "token": new_invite.id}
@@ -561,8 +607,17 @@ async def process_invitation_join(
     # 2. Check if the targeted email is already registered
     user = db.query(models.User).filter(models.User.email == invite.target_email).first()
     
-    # Check if the user is ALREADY an organisation member (idempotency safeguard)
+    # Check if the user is the owner or ALREADY an organisation member (idempotency safeguard)
     if user:
+        if org and org.owner_id == user.id:
+            return {
+                "status": "already_member",
+                "org_name": org_name,
+                "org_logo": org_logo,
+                "email": invite.target_email,
+                "message": f"You are the owner of {org_name}."
+            }
+
         existing_member = db.query(models.OrganisationMember).filter(
             models.OrganisationMember.user_id == user.id,
             models.OrganisationMember.organisation_id == invite.organisation_id
@@ -782,29 +837,69 @@ async def get_joined_organisations(
     return result
     
 
-@router.delete("{org_id}/member/{id}/remove")
+@router.delete("/{org_id}/members/{user_id}")
+@router.delete("/{org_id}/member/{user_id}/remove")
 async def remove_member(
-    org_id,
-    id: UUID,
+    org_id: UUID,
+    user_id: UUID,
     user=Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    #validate user is admin of org
-    admin = db.query(models.Organisation).filter(models.Organisation.owner_id==user.id).first()
-    if not admin: 
+    # 1. Verify organisation exists
+    org = db.query(models.Organisation).filter(models.Organisation.id == org_id).first()
+    if not org:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Not admin, cannot perform action"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisation not found."
         )
-    #check if member exists in orgms
-    member=db.query(models.OrganisationMember).filter(models.OrganisationMember.organisation_id==org_id, models.OrganisationMember.user_id==id)
+
+    # 2. Validate requesting user is admin/owner of this specific organisation
+    if org.owner_id != user.id:
+        admin_member = db.query(models.OrganisationMember).filter(
+            models.OrganisationMember.organisation_id == org_id,
+            models.OrganisationMember.user_id == user.id,
+            models.OrganisationMember.role == "admin"
+        ).first()
+        if not admin_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Not authorized to remove members from this organisation."
+            )
+
+    # 3. Prevent removing the owner
+    if user_id == org.owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The organization owner cannot be removed."
+        )
+
+    # 4. Prevent self-removal through this endpoint
+    if user_id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot remove yourself from the organisation."
+        )
+
+    # 5. Check if member exists in OrganisationMember
+    member = db.query(models.OrganisationMember).filter(
+        models.OrganisationMember.organisation_id == org_id,
+        models.OrganisationMember.user_id == user_id
+    ).first()
+
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
-            detail="User does not belong to this organisation"
+            detail="User does not belong to this organisation."
         )
-    member.delete()
+
+    db.delete(member)
     db.commit()
+
+    return {
+        "status": "success",
+        "message": "Member removed successfully",
+        "user_id": str(user_id)
+    }
 
 
 @router.get("/{course_id}/enrollments/org-students")
