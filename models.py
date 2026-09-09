@@ -4,7 +4,7 @@ from database import Base
 import uuid
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum,Boolean,Float, ForeignKeyConstraint, UniqueConstraint,Date
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Boolean, Float, ForeignKeyConstraint, UniqueConstraint, Date, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from schemas import Roles, Gender
@@ -46,7 +46,7 @@ class User(Base):
 class DeviceToken(Base):
     __tablename__ = "device_tokens"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
     token = Column(String, unique=True, index=True, nullable=False)
     device_type = Column(String) # e.g., 'android', 'ios', 'desktop'
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -74,7 +74,7 @@ class Organisation(Base):
     number = Column(String, nullable=False)
     website = Column(String, nullable=True)
     address = Column(String, nullable=False)
-    owner_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"))
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), index=True)
     logo = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"), default="e8b15d94-8a43-4f11-9238-a5c2d6e7f8b9",nullable=True)
@@ -103,19 +103,28 @@ class Plan(Base):
 class OrganisationMember(Base):
     __tablename__ = "OrganisationMembers"
     user_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), primary_key=True)
-    organisation_id = Column(UUID(as_uuid=True), ForeignKey("Organisations.id", ondelete="CASCADE"), primary_key=True)
+    organisation_id = Column(UUID(as_uuid=True), ForeignKey("Organisations.id", ondelete="CASCADE"), primary_key=True, index=True)
     role  = Column(String, nullable=False, default="student")
+
+    __table_args__ = (
+        Index("ix_org_members_org_role", "organisation_id", "role"),
+    )
 
 class Invitations(Base):
     __tablename__ = "invitations"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     target_email = Column(String, nullable=True)
-    organisation_id = Column(UUID(as_uuid=True), ForeignKey("Organisations.id", ondelete="CASCADE"), nullable=False)
+    organisation_id = Column(UUID(as_uuid=True), ForeignKey("Organisations.id", ondelete="CASCADE"), nullable=False, index=True)
     uses_left = Column(Integer, default=1, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     role = Column(String,nullable=False, server_default = "student")
+
+    __table_args__ = (
+        Index("ix_invitations_org_email", "organisation_id", "target_email"),
+        Index("ix_invitations_org_expires", "organisation_id", "expires_at"),
+    )
 #courses and categories
 
 class Category(Base):
@@ -129,16 +138,16 @@ class Category(Base):
 class Course(Base):
     __tablename__ = "courses"
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
-    admin_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), nullable=False)
+    admin_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=False, default=name)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    category_id = Column(UUID(as_uuid=True), ForeignKey(Category.id))
+    category_id = Column(UUID(as_uuid=True), ForeignKey(Category.id), index=True)
     objectives = Column(ARRAY(String), nullable=True)
     public = Column(String, default="false")
-    org_id = Column(UUID(as_uuid=True), ForeignKey(Organisation.id, ondelete = "CASCADE"), nullable = True)
+    org_id = Column(UUID(as_uuid=True), ForeignKey(Organisation.id, ondelete = "CASCADE"), nullable = True, index=True)
     image_url= Column(String, nullable=True)
-    teacher_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="SET NULL"), nullable=True)
+    teacher_id = Column(UUID(as_uuid=True), ForeignKey(User.id, ondelete="SET NULL"), nullable=True, index=True)
     supervised = Column(Boolean, default=False)
     chat_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL", use_alter=True,), nullable=True)
     is_freelance = Column(Boolean, nullable=False, server_default=false())
@@ -157,7 +166,7 @@ class Course(Base):
 class Enrollment(Base):
     __tablename__ = 'enrollments'
     student_id = Column(UUID(as_uuid=True),ForeignKey(User.id, ondelete = "CASCADE"), primary_key=True)
-    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete= "CASCADE"), nullable=False, primary_key=True)
+    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete= "CASCADE"), nullable=False, primary_key=True, index=True)
     final_score= Column(Integer, default=0)
     certificate_url = Column(String, nullable=True)
     credential_id = Column(String, nullable=True)
@@ -168,6 +177,9 @@ class Enrollment(Base):
     course = relationship("Course",overlaps="Students,courses")
     student = relationship("User",overlaps="Students,courses")
 
+    __table_args__ = (
+        Index("ix_enrollments_course_completed", "course_id", "completed_at"),
+    )
     
 #lessons and Modules
 class Module(Base):
@@ -175,7 +187,7 @@ class Module(Base):
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False)
+    course_id = Column(UUID(as_uuid=True), ForeignKey(Course.id, ondelete = "CASCADE"), nullable = False, index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     
@@ -190,7 +202,7 @@ class Lesson(Base):
     id = Column(UUID(as_uuid=True), primary_key = True, default=uuid.uuid4, index=True)
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    module_id = Column(UUID(as_uuid=True), ForeignKey(Module.id, ondelete = "CASCADE"), nullable = False)
+    module_id = Column(UUID(as_uuid=True), ForeignKey(Module.id, ondelete = "CASCADE"), nullable = False, index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     order_index = Column(Integer, nullable = False)
@@ -225,6 +237,9 @@ class LessonProgress(Base):
             ['enrollments.student_id', 'enrollments.course_id'], 
             ondelete="CASCADE" # If the enrollment is deleted, this progress is deleted!
         ),
+        Index("ix_lesson_progress_student_course", "student_id", "course_id"),
+        Index("ix_lesson_progress_student_lesson", "student_id", "lesson_id"),
+        Index("ix_lesson_progress_course_id", "course_id"),
     )
 
 
@@ -256,7 +271,7 @@ class ChannelMember(Base):
     __tablename__ = 'channel_members'
     
     channel_id = Column(UUID(as_uuid=True), ForeignKey('channels.id', ondelete="CASCADE"), primary_key=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), primary_key=True, index=True)
     
     # Distinguish between an admin (can post in announcement chats) and a standard member
     role = Column(String, default="member", nullable=False) 
@@ -273,7 +288,7 @@ class Message(Base):
     __tablename__ = 'messages'
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    channel_id = Column(UUID(as_uuid=True), ForeignKey('channels.id', ondelete="CASCADE"), nullable=False)
+    channel_id = Column(UUID(as_uuid=True), ForeignKey('channels.id', ondelete="CASCADE"), nullable=False, index=True)
     sender_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
     
     type = Column(String, default="text", nullable=False)
@@ -288,6 +303,10 @@ class Message(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        Index("ix_messages_channel_created_at", "channel_id", "created_at"),
+    )
+
     # Relationships
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User")
@@ -298,7 +317,7 @@ class StudyMaterial(Base):
     __tablename__ = "study_materials"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
     
     title = Column(String, nullable=False)
     source_type = Column(String, nullable=False)
@@ -319,8 +338,8 @@ class Flashcard(Base):
     __tablename__ = "flashcards"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
-    material_id = Column(UUID(as_uuid=True), ForeignKey("study_materials.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    material_id = Column(UUID(as_uuid=True), ForeignKey("study_materials.id", ondelete="SET NULL"), nullable=True, index=True)
     
     front = Column(String, nullable=False)
     back = Column(String, nullable=False)
@@ -333,6 +352,10 @@ class Flashcard(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        Index("ix_flashcards_user_next_review", "user_id", "next_review_date"),
+    )
+
     # Relationships
     material = relationship("StudyMaterial", back_populates="flashcards")
     user = relationship("User", backref="flashcards")
@@ -341,8 +364,8 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
-    material_id = Column(UUID(as_uuid=True), ForeignKey("study_materials.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    material_id = Column(UUID(as_uuid=True), ForeignKey("study_materials.id", ondelete="CASCADE"), nullable=True, index=True)
     
     question_text = Column(String, nullable=False)
     options = Column(JSONB, nullable=False) # Stores the array of strings: ["A", "B", "C", "D"]
@@ -402,6 +425,8 @@ class Connection(Base):
     # Prevent someone from spamming multiple requests to the same person
     __table_args__ = (
         UniqueConstraint('requester_id', 'addressee_id', name='_requester_addressee_uc'),
+        Index('ix_connections_addressee_status', 'addressee_id', 'status'),
+        Index('ix_connections_requester_status', 'requester_id', 'status'),
     )
 
     # Relationships to easily fetch the User objects
@@ -439,8 +464,8 @@ class Playlist(Base):
     
     
     # Links to the existing 'user' table
-    creator_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
-    org_id = Column(UUID(as_uuid=True), ForeignKey(Organisation.id, ondelete = "CASCADE"), nullable = True)
+    creator_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), nullable=False, index=True)
+    org_id = Column(UUID(as_uuid=True), ForeignKey(Organisation.id, ondelete = "CASCADE"), nullable = True, index=True)
     image_url= Column(String, nullable=True)
     rating = Column(Float, default=0.0, nullable=False)
     is_public = Column(Boolean, default=True, nullable=False)
@@ -459,7 +484,7 @@ class PlaylistCourse(Base):
     
     # Links the specific playlist and course together
     playlist_id = Column(UUID(as_uuid=True), ForeignKey('playlists.id', ondelete="CASCADE"), primary_key=True)
-    course_id = Column(UUID(as_uuid=True), ForeignKey('courses.id', ondelete="CASCADE"), primary_key=True)
+    course_id = Column(UUID(as_uuid=True), ForeignKey('courses.id', ondelete="CASCADE"), primary_key=True, index=True)
     
     # Mirrors the sorting logic you used in your Module and Lesson tables
     order_index = Column(Integer, nullable=False, default=0) 
@@ -473,13 +498,17 @@ class PlaylistEnrollment(Base):
     __tablename__ = 'playlist_enrollments'
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    playlist_id = Column(UUID(as_uuid=True), ForeignKey('playlists.id', ondelete="CASCADE"), nullable=False)
-    student_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
+    playlist_id = Column(UUID(as_uuid=True), ForeignKey('playlists.id', ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(UUID(as_uuid=True), ForeignKey('user.id', ondelete="CASCADE"), nullable=False, index=True)
     
     enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
     progress = Column(Float, default=0.0) # 0 to 100
     
+    __table_args__ = (
+        Index("ix_playlist_enrollments_student_playlist", "student_id", "playlist_id"),
+    )
+
     # Relationships
     playlist = relationship("Playlist", backref="enrollments")
     student = relationship("User", backref="playlist_enrollments")

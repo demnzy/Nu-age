@@ -1,7 +1,7 @@
 from fastapi import *
 from schemas import *
 from database import get_db
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from services.bunny_service import upload_audio_to_bunny
 from sqlalchemy import or_
 from database import Settings
@@ -124,8 +124,8 @@ def get_all_courses(
         joinedload(models.Course.admin),
         joinedload(models.Course.category),
         joinedload(models.Course.organisation),
-        joinedload(models.Course.Students),
-        joinedload(models.Course.modules)
+        selectinload(models.Course.Students),
+        selectinload(models.Course.modules)
     )
     
     # 2. Apply Filters

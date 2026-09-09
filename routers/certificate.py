@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 from datetime import datetime
 import uuid
@@ -37,7 +37,9 @@ async def generate_and_upload_certificate(
             "credential_id": enrollment.credential_id
         }
 
-    course = db.query(models.Course).filter_by(id=course_id).first()
+    course = db.query(models.Course).options(
+        joinedload(models.Course.organisation)
+    ).filter_by(id=course_id).first()
     org = course.organisation
     org_name = org.name if org else "Nu-Age Platform"
     student_name = f"{user.first_name} {user.last_name}"

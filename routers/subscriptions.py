@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Dict
 import models
 import schemas
@@ -39,7 +39,9 @@ def get_subscription_status(
     Calculates the user's remaining limits based on their database plan.
     """
     # Fetch user subscription with the joined plan
-    sub = db.query(models.UserSubscription).filter(
+    sub = db.query(models.UserSubscription).options(
+        joinedload(models.UserSubscription.plan)
+    ).filter(
         models.UserSubscription.user_id == current_user.id
     ).first()
 

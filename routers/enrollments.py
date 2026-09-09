@@ -231,40 +231,43 @@ def bulk_enroll_students(course_id: UUID, payload: EnrollmentActionPayload, user
         
     enrolled_count = 0
     added_names = []
-        
-    # 2. Process each student
-    for s_id in payload.student_ids:
-        # THE FIX: Cast the IDs to true UUID objects right here
-        s_uuid = uuid.UUID(str(s_id))
-        c_uuid = uuid.UUID(str(course_id))
+    c_uuid = uuid.UUID(str(course_id))
+    parsed_student_uuids = [uuid.UUID(str(s_id)) for s_id in payload.student_ids]
 
-        # Check if they are already enrolled
-        exists = db.query(models.Enrollment).filter_by(student_id=s_uuid, course_id=c_uuid).first()
-        if not exists:
-            # Enroll them using the casted UUIDs
-            new_enrollment = models.Enrollment(student_id=s_uuid, course_id=c_uuid)
-            db.add(new_enrollment)
-            enrolled_count += 1
-            
-            # 3. CHAT INTEGRATION: Auto-add to group chat
-            if getattr(course, "chat_id", None):
-                chat_uuid = uuid.UUID(str(course.chat_id))
-                
-                chat_member_exists = db.query(models.ChannelMember).filter_by(
-                    channel_id=chat_uuid, user_id=s_uuid
-                ).first()
-                
-                if not chat_member_exists:
-                    db.add(models.ChannelMember(
-                        channel_id=chat_uuid, 
-                        user_id=s_uuid, 
-                        role="member"
-                    ))
-                    
-                    # Fetch user to grab their name for the summary system message
-                    student_user = db.query(models.User).filter_by(id=s_uuid).first()
-                    if student_user:
-                        added_names.append(f"{student_user.first_name} {student_user.last_name}")
+    # 2. Batch check for existing enrollments (1 query instead of N)
+    existing_enrolled_ids = {
+        row[0] for row in db.query(models.Enrollment.student_id)
+        .filter(models.Enrollment.course_id == c_uuid, models.Enrollment.student_id.in_(parsed_student_uuids))
+        .all()
+    }
+    to_enroll_uuids = [s for s in parsed_student_uuids if s not in existing_enrolled_ids]
+
+    for s_uuid in to_enroll_uuids:
+        db.add(models.Enrollment(student_id=s_uuid, course_id=c_uuid))
+        enrolled_count += 1
+
+    # 3. CHAT INTEGRATION: Auto-add to group chat in batch (2 queries instead of 2*N)
+    if getattr(course, "chat_id", None) and to_enroll_uuids:
+        chat_uuid = uuid.UUID(str(course.chat_id))
+        existing_chat_member_ids = {
+            row[0] for row in db.query(models.ChannelMember.user_id)
+            .filter(models.ChannelMember.channel_id == chat_uuid, models.ChannelMember.user_id.in_(to_enroll_uuids))
+            .all()
+        }
+        new_chat_uuids = [s for s in to_enroll_uuids if s not in existing_chat_member_ids]
+
+        if new_chat_uuids:
+            for s_uuid in new_chat_uuids:
+                db.add(models.ChannelMember(
+                    channel_id=chat_uuid,
+                    user_id=s_uuid,
+                    role="member"
+                ))
+
+            # Fetch user names for the summary system message in 1 query
+            users = db.query(models.User).filter(models.User.id.in_(new_chat_uuids)).all()
+            for u in users:
+                added_names.append(f"{u.first_name} {u.last_name}")
 
     # 4. Create ONE aggregated System Message to prevent spamming the chat
     if added_names and getattr(course, "chat_id", None):
